@@ -1,0 +1,43 @@
+# Dependencies
+api/node_modules/
+frontend/node_modules/
+
+# Build
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Auth (keep local only)
+.htpasswd
+
+# PDF.js assets (se generan al instalar dependencias)
+frontend/public/pdf.worker.min.js
+frontend/public/cmaps/
+frontend/public/standard_fonts/
+public/pdf.worker.min.js
+public/cmaps/
+public/standard_fonts/
+
+# Build artifacts (solo mantener el último)
+public/static/js/main.*.js
+public/static/js/main.*.js.map
+public/static/js/main.*.LICENSE.txt
+public/index.html
+public/asset-manifest.json
+frontend/public/index.html
