@@ -383,7 +383,7 @@ export default function App() {
         <div style={{ background: '#c0392b', padding: 12, borderRadius: 6, marginBottom: 16 }}>{error}</div>
       )}
 
-      <PathNavigator path={path} setPath={setPath} setSearchQuery={setSearchQuery} setSelected={setSelected} />
+      <PathNavigator path={path} setPath={setPath} setSearchQuery={setSearchQuery} setSelected={setSelected} onRefresh={fetchFiles} />
 
       {showMkdir && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -650,7 +650,7 @@ export default function App() {
   );
 }
 
-function PathNavigator({ path, setPath, setSearchQuery, setSelected }) {
+function PathNavigator({ path, setPath, setSearchQuery, setSelected, onRefresh }) {
   const [editMode, setEditMode] = useState(false);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef(null);
@@ -719,6 +719,7 @@ function PathNavigator({ path, setPath, setSearchQuery, setSelected }) {
           {fullDisplay}
         </div>
       )}
+      <button style={btnStyle2} onClick={onRefresh} title="Recargar directorio">🔄</button>
     </div>
   );
 }
