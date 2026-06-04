@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const basicAuth = require('express-basic-auth');
+const { ZipArchive } = require('archiver');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -323,6 +324,67 @@ app.post('/api/save', (req, res) => {
     res.json({ message: 'Archivo guardado', path: req.body.path });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// CREAR ZIP desde selección de archivos/carpetas
+app.post('/api/zip', async (req, res) => {
+  try {
+    const { paths } = req.body;
+    if (!Array.isArray(paths) || paths.length === 0) {
+      return res.status(400).json({ error: 'No se seleccionó ningún elemento' });
+    }
+
+    // Resolver y validar todos los paths
+    const resolvedPaths = [];
+    for (const p of paths) {
+      const fullPath = resolveSafePath(p);
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ error: `No encontrado: ${p}` });
+      }
+      resolvedPaths.push({ relative: p, full: fullPath });
+    }
+
+    // Nombre del ZIP
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:T]/g, '-').split('.')[0];
+    const zipName = req.body.zipName || `export_${timestamp}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+    const archive = new ZipArchive({ zlib: { level: 6 } });
+
+    archive.on('error', (err) => {
+      console.error('Archiver error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error al generar el ZIP' });
+      }
+    });
+
+    archive.on('warning', (err) => {
+      if (err.code !== 'ENOENT') {
+        console.error('Archiver warning:', err);
+      }
+    });
+
+    archive.pipe(res);
+
+    for (const item of resolvedPaths) {
+      const stat = fs.statSync(item.full);
+      if (stat.isDirectory()) {
+        archive.directory(item.full, item.relative);
+      } else {
+        archive.file(item.full, { name: path.basename(item.relative) });
+      }
+    }
+
+    await archive.finalize();
+  } catch (err) {
+    console.error('ZIP error:', err);
+    if (!res.headersSent) {
+      res.status(400).json({ error: err.message });
+    }
   }
 });
 

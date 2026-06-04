@@ -65,6 +65,11 @@ export default function App() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // ZIP modal
+  const [showZipModal, setShowZipModal] = useState(false);
+  const [zipName, setZipName] = useState('');
+  const [zipLoading, setZipLoading] = useState(false);
+
   // Preview modal (view-only)
   const [previewItem, setPreviewItem] = useState(null);
   const [previewType, setPreviewType] = useState(null);
@@ -293,6 +298,49 @@ export default function App() {
     setEditorModified(false);
   };
 
+  const handleCreateZip = async () => {
+    if (selected.size === 0) return;
+    setZipLoading(true);
+    setError('');
+    try {
+      const paths = Array.from(selected).map(name => path === '.' ? name : `${path}/${name}`);
+      const response = await axios.post(`${API}/api/zip`, {
+        paths,
+        zipName: zipName.trim() || undefined
+      }, { responseType: 'blob' });
+
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const contentDisposition = response.headers['content-disposition'];
+      const match = contentDisposition && contentDisposition.match(/filename="?([^"]+)"?/);
+      a.download = match ? match[1] : 'export.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      setShowZipModal(false);
+      setZipName('');
+      setSelected(new Set());
+    } catch (err) {
+      if (err.response?.data instanceof Blob) {
+        const text = await err.response.data.text();
+        try {
+          const json = JSON.parse(text);
+          setError(json.error || 'Error al crear el ZIP');
+        } catch {
+          setError('Error al crear el ZIP');
+        }
+      } else {
+        setError(err.response?.data?.error || err.message);
+      }
+    } finally {
+      setZipLoading(false);
+    }
+  };
+
   const getDownloadUrl = (name) => {
     const p = path === '.' ? name : `${path}/${name}`;
     return `${API}/api/download?path=${encodeURIComponent(p)}`;
@@ -319,7 +367,10 @@ export default function App() {
           </label>
           <button style={btnStyle} onClick={() => setShowMkdir(!showMkdir)}>📂 Nueva carpeta</button>
           {selected.size > 0 && (
-            <button style={{ ...btnStyle, background: '#c0392b' }} onClick={deleteSelected}>🗑️ Eliminar ({selected.size})</button>
+            <>
+              <button style={{ ...btnStyle, background: '#8e44ad' }} onClick={() => setShowZipModal(true)}>📦 Crear ZIP ({selected.size})</button>
+              <button style={{ ...btnStyle, background: '#c0392b' }} onClick={deleteSelected}>🗑️ Eliminar ({selected.size})</button>
+            </>
           )}
         </div>
       </header>
@@ -512,6 +563,39 @@ export default function App() {
             ) : (
               <p>Tipo de archivo no soportado para vista previa.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de ZIP */}
+      {showZipModal && (
+        <div style={modalOverlayStyle} onClick={() => { if (!zipLoading) setShowZipModal(false); }}>
+          <div style={{ ...modalContentStyle, maxWidth: 450 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18 }}>📦 Crear ZIP</h2>
+              <button style={btnStyle2} onClick={() => setShowZipModal(false)} disabled={zipLoading}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>
+              Se comprimirán {selected.size} elemento(s) seleccionado(s).
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, color: '#888', marginBottom: 6 }}>Nombre del archivo ZIP</label>
+              <input
+                style={{ ...inputStyle, width: '100%' }}
+                value={zipName}
+                onChange={e => setZipName(e.target.value)}
+                placeholder="export_2025-01-01-12-00-00.zip"
+                onKeyDown={e => e.key === 'Enter' && handleCreateZip()}
+                disabled={zipLoading}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btnStyle2} onClick={() => setShowZipModal(false)} disabled={zipLoading}>Cancelar</button>
+              <button style={{ ...btnStyle, background: '#8e44ad' }} onClick={handleCreateZip} disabled={zipLoading}>
+                {zipLoading ? '⏳ Generando...' : '📦 Crear y descargar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
