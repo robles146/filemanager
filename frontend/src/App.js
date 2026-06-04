@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import PdfViewer from './PdfViewer';
 import OfficeViewer from './OfficeViewer';
