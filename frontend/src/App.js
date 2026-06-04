@@ -103,6 +103,8 @@ export default function App() {
   const navigate = (name, isDir) => {
     if (isDir) {
       setPath(path === '.' ? name : `${path}/${name}`);
+      setSearchQuery('');
+      setSelected(new Set());
     }
   };
 
@@ -110,6 +112,8 @@ export default function App() {
     if (path === '.' || path === '') return;
     const idx = path.lastIndexOf('/');
     setPath(idx <= 0 ? '.' : path.substring(0, idx));
+    setSearchQuery('');
+    setSelected(new Set());
   };
 
   const handleUpload = async (e) => {
@@ -379,12 +383,7 @@ export default function App() {
         <div style={{ background: '#c0392b', padding: 12, borderRadius: 6, marginBottom: 16 }}>{error}</div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={btnStyle2} onClick={goUp} disabled={path === '.'}>⬅️ Subir</button>
-        <div style={{ fontFamily: 'monospace', background: '#16213e', padding: '8px 14px', borderRadius: 6, flex: 1, minWidth: 200 }}>
-          /var/www/{path === '.' ? '' : path}
-        </div>
-      </div>
+      <PathNavigator path={path} setPath={setPath} setSearchQuery={setSearchQuery} setSelected={setSelected} />
 
       {showMkdir && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -647,6 +646,79 @@ export default function App() {
       <footer style={{ marginTop: 24, textAlign: 'center', color: '#888', fontSize: 12 }}>
         FileManager · /var/www
       </footer>
+    </div>
+  );
+}
+
+function PathNavigator({ path, setPath, setSearchQuery, setSelected }) {
+  const [editMode, setEditMode] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef(null);
+
+  const displayPath = path === '.' ? '' : path;
+  const fullDisplay = `/var/www/${displayPath}`;
+
+  const enterEditMode = () => {
+    setEditMode(true);
+    setEditValue(displayPath);
+  };
+
+  const commitPath = () => {
+    const trimmed = editValue.trim();
+    const newPath = trimmed === '' ? '.' : trimmed.replace(/^\/+|\/+$/g, '');
+    setPath(newPath);
+    setSearchQuery('');
+    setSelected(new Set());
+    setEditMode(false);
+  };
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditValue('');
+  };
+
+  useEffect(() => {
+    if (editMode && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editMode]);
+
+  const goUp = () => {
+    if (path === '.' || path === '') return;
+    const idx = path.lastIndexOf('/');
+    setPath(idx <= 0 ? '.' : path.substring(0, idx));
+    setSearchQuery('');
+    setSelected(new Set());
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <button style={btnStyle2} onClick={goUp} disabled={path === '.'}>⬅️ Subir</button>
+      {editMode ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+          <span style={{ fontFamily: 'monospace', color: '#888', fontSize: 14, whiteSpace: 'nowrap' }}>/var/www/</span>
+          <input
+            ref={inputRef}
+            style={{ ...inputStyle, flex: 1, fontFamily: 'monospace', fontSize: 14 }}
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') commitPath();
+              if (e.key === 'Escape') cancelEdit();
+            }}
+            onBlur={commitPath}
+          />
+        </div>
+      ) : (
+        <div
+          style={{ fontFamily: 'monospace', background: '#16213e', padding: '8px 14px', borderRadius: 6, flex: 1, minWidth: 200, cursor: 'pointer', fontSize: 14 }}
+          onClick={enterEditMode}
+          title="Click para editar la ruta"
+        >
+          {fullDisplay}
+        </div>
+      )}
     </div>
   );
 }
