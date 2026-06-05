@@ -418,8 +418,8 @@ export default function App() {
       {loading ? (
         <p>Cargando...</p>
       ) : (
-        <div style={{ background: '#16213e', borderRadius: 8, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ background: '#16213e', borderRadius: 8, overflow: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
               <tr style={{ background: '#0f3460', textAlign: 'left' }}>
                 <th style={thStyle}><input type="checkbox" onChange={e => setSelected(e.target.checked ? new Set(items.map(i => i.name)) : new Set())} checked={selected.size === items.length && items.length > 0} /></th>
@@ -437,13 +437,13 @@ export default function App() {
                   return (
                     <tr key={item.name} style={{ borderBottom: '1px solid #1a1a2e' }}>
                       <td style={tdStyle}><input type="checkbox" checked={selected.has(item.name)} onChange={() => toggleSelect(item.name)} /></td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, maxWidth: 200 }}>
                         {item.isDirectory ? (
-                          <span style={{ cursor: 'pointer', color: '#4cc9f0', fontWeight: 600 }} onClick={() => navigate(item.name, true)}>
+                          <span style={{ cursor: 'pointer', color: '#4cc9f0', fontWeight: 600, wordBreak: 'break-all', display: 'inline-block' }} onClick={() => navigate(item.name, true)}>
                             📁 {item.name}
                           </span>
                         ) : (
-                          <span>📄 {item.name}</span>
+                          <span style={{ wordBreak: 'break-all', display: 'inline-block' }}>📄 {item.name}</span>
                         )}
                       </td>
                       <td style={tdStyle}>{formatSize(item.size)}</td>
@@ -845,6 +845,14 @@ const responsiveCSS = `
   @media (min-width: 769px) {
     .desktop-actions { display: flex !important; }
     .mobile-actions { display: none !important; }
+  }
+  /* Scroll horizontal en la tabla cuando el contenido es muy ancho */
+  .fm-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fm-table-wrapper table {
+    min-width: 700px;
   }
 `;
 
