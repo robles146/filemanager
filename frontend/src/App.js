@@ -70,6 +70,9 @@ export default function App() {
   const [zipName, setZipName] = useState('');
   const [zipLoading, setZipLoading] = useState(false);
 
+  // Dropdown menu state (mobile actions)
+  const [openDropdown, setOpenDropdown] = useState(null);
+
   // Preview modal (view-only)
   const [previewItem, setPreviewItem] = useState(null);
   const [previewType, setPreviewType] = useState(null);
@@ -453,19 +456,47 @@ export default function App() {
                             <button style={btnStyle2} onClick={() => setRenameTarget(null)}>✕</button>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            {!item.isDirectory && actions.canPreview && (
-                              <button style={btnStyle2} onClick={() => openPreview(item.name)} title="Vista previa">👁️</button>
-                            )}
-                            {!item.isDirectory && actions.canEdit && (
-                              <button style={btnStyle2} onClick={() => openEditor(item.name)} title="Editar">✏️</button>
-                            )}
-                            <button style={btnStyle2} onClick={() => openDetails(item.name)} title="Ver detalles">ℹ️</button>
-                            {!item.isDirectory && (
-                              <button style={btnStyle2} onClick={() => handleDownload(item.name)} title="Descargar">⬇️</button>
-                            )}
-                            <button style={btnStyle2} onClick={() => { setRenameTarget(item.name); setRenameValue(item.name); }} title="Renombrar">📝</button>
-                            <button style={{ ...btnStyle2, background: '#c0392b' }} onClick={() => handleDelete(item.name)} title="Eliminar">🗑️</button>
+                          <div style={{ position: 'relative' }}>
+                            {/* Desktop: botones inline */}
+                            <div style={{ display: 'flex', gap: 6 }} className="desktop-actions">
+                              {!item.isDirectory && actions.canPreview && (
+                                <button style={btnStyle2} onClick={() => openPreview(item.name)} title="Vista previa">👁️</button>
+                              )}
+                              {!item.isDirectory && actions.canEdit && (
+                                <button style={btnStyle2} onClick={() => openEditor(item.name)} title="Editar">✏️</button>
+                              )}
+                              <button style={btnStyle2} onClick={() => openDetails(item.name)} title="Ver detalles">ℹ️</button>
+                              {!item.isDirectory && (
+                                <button style={btnStyle2} onClick={() => handleDownload(item.name)} title="Descargar">⬇️</button>
+                              )}
+                              <button style={btnStyle2} onClick={() => { setRenameTarget(item.name); setRenameValue(item.name); }} title="Renombrar">📝</button>
+                              <button style={{ ...btnStyle2, background: '#c0392b' }} onClick={() => handleDelete(item.name)} title="Eliminar">🗑️</button>
+                            </div>
+                            {/* Mobile: dropdown */}
+                            <div style={{ display: 'none' }} className="mobile-actions">
+                              <button
+                                style={{ ...btnStyle2, padding: '6px 12px' }}
+                                onClick={() => setOpenDropdown(openDropdown === item.name ? null : item.name)}
+                              >
+                                ⚙️ Acciones
+                              </button>
+                              {openDropdown === item.name && (
+                                <div style={dropdownStyle}>
+                                  {!item.isDirectory && actions.canPreview && (
+                                    <div style={dropdownItemStyle} onClick={() => { openPreview(item.name); setOpenDropdown(null); }}>👁️ Vista previa</div>
+                                  )}
+                                  {!item.isDirectory && actions.canEdit && (
+                                    <div style={dropdownItemStyle} onClick={() => { openEditor(item.name); setOpenDropdown(null); }}>✏️ Editar</div>
+                                  )}
+                                  <div style={dropdownItemStyle} onClick={() => { openDetails(item.name); setOpenDropdown(null); }}>ℹ️ Detalles</div>
+                                  {!item.isDirectory && (
+                                    <div style={dropdownItemStyle} onClick={() => { handleDownload(item.name); setOpenDropdown(null); }}>⬇️ Descargar</div>
+                                  )}
+                                  <div style={dropdownItemStyle} onClick={() => { setRenameTarget(item.name); setRenameValue(item.name); setOpenDropdown(null); }}>📝 Renombrar</div>
+                                  <div style={{ ...dropdownItemStyle, color: '#e74c3c' }} onClick={() => { handleDelete(item.name); setOpenDropdown(null); }}>🗑️ Eliminar</div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </td>
@@ -781,3 +812,46 @@ const modalContentStyle = {
   overflow: 'auto',
   boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
 };
+
+const dropdownStyle = {
+  position: 'absolute',
+  right: 0,
+  top: 'calc(100% + 4px)',
+  background: '#1a1a2e',
+  border: '1px solid #333',
+  borderRadius: 6,
+  minWidth: 160,
+  zIndex: 100,
+  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+  overflow: 'hidden'
+};
+
+const dropdownItemStyle = {
+  padding: '10px 14px',
+  fontSize: 13,
+  cursor: 'pointer',
+  borderBottom: '1px solid #222',
+  whiteSpace: 'nowrap'
+};
+
+// Inyectar CSS responsive para mostrar/ocultar acciones según pantalla
+const responsiveCSS = `
+  @media (max-width: 768px) {
+    .desktop-actions { display: none !important; }
+    .mobile-actions { display: block !important; }
+    th:nth-child(3), td:nth-child(3),
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+  @media (min-width: 769px) {
+    .desktop-actions { display: flex !important; }
+    .mobile-actions { display: none !important; }
+  }
+`;
+
+// Inyectar el CSS en el head si no existe
+if (typeof document !== 'undefined' && !document.getElementById('fm-responsive-styles')) {
+  const style = document.createElement('style');
+  style.id = 'fm-responsive-styles';
+  style.textContent = responsiveCSS;
+  document.head.appendChild(style);
+}
