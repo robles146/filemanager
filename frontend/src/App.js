@@ -4,6 +4,7 @@ import PdfViewer from './PdfViewer';
 import OfficeViewer from './OfficeViewer';
 import CsvViewer from './CsvViewer';
 import MediaViewer from './MediaViewer';
+import TextViewer from './TextViewer';
 
 const API = '';
 
@@ -64,6 +65,9 @@ export default function App() {
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingFileTarget, setPendingFileTarget] = useState(null);
+
+  const rowRefs = useRef({});
 
   // ZIP modal
   const [showZipModal, setShowZipModal] = useState(false);
@@ -86,6 +90,59 @@ export default function App() {
   const [editorModified, setEditorModified] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
 
+  const openPreviewRef = useRef(() => {});
+  const openEditorRef = useRef(() => {});
+  const openDetailsRef = useRef(() => {});
+
+  // Helper: convertir ruta absoluta /var/www/... a relativa usada por el frontend
+  const normalizeFrontendPath = useCallback((rawPath) => {
+    if (!rawPath) return '.';
+    const base = '/var/www';
+    if (rawPath === base || rawPath === base + '/') return '.';
+    if (rawPath.startsWith(base + '/')) return rawPath.slice(base.length + 1);
+    return rawPath.replace(/^\/+/, '');
+  }, []);
+
+  // Leer parámetro ?path= de la URL al cargar y abrir directorio/archivo automáticamente
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetPath = params.get('path');
+    if (!targetPath) return;
+
+    const resolveAndOpen = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await axios.get(`${API}/api/details?path=${encodeURIComponent(targetPath)}`);
+        const details = res.data;
+        if (details.isDirectory) {
+          setPath(normalizeFrontendPath(targetPath));
+        } else if (details.isFile) {
+          const normalized = normalizeFrontendPath(targetPath);
+          const lastSlash = normalized.lastIndexOf('/');
+          const dirPath = lastSlash === -1 ? '.' : normalized.substring(0, lastSlash);
+          const fileName = lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
+          setPath(dirPath);
+          setPendingFileTarget({ name: fileName });
+        } else {
+          setError(`La ruta no es un archivo ni directorio: ${targetPath}`);
+        }
+      } catch (err) {
+        setError(err.response?.data?.error || `No se pudo abrir: ${targetPath}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    resolveAndOpen();
+  }, []);
+
+  useEffect(() => {
+    openPreviewRef.current = openPreview;
+    openEditorRef.current = openEditor;
+    openDetailsRef.current = openDetails;
+  });
+
   const fetchFiles = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -102,6 +159,30 @@ export default function App() {
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(() => {
+    if (!pendingFileTarget || loading) return;
+    const foundItem = items.find(i => i.name === pendingFileTarget.name);
+    if (!foundItem) {
+      setError(`Archivo no encontrado en el directorio: ${pendingFileTarget.name}`);
+      setPendingFileTarget(null);
+      return;
+    }
+    const rowEl = rowRefs.current[pendingFileTarget.name];
+    if (rowEl) {
+      rowEl.focus();
+      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    const actions = !foundItem.isDirectory ? getFileActions(foundItem.name) : {};
+    if (actions.canPreview) {
+      openPreviewRef.current(foundItem.name);
+    } else if (actions.canEdit) {
+      openEditorRef.current(foundItem.name);
+    } else {
+      openDetailsRef.current(foundItem.name);
+    }
+    setPendingFileTarget(null);
+  }, [items, loading, pendingFileTarget]);
 
   const navigate = (name, isDir) => {
     if (isDir) {
@@ -238,20 +319,13 @@ export default function App() {
     setPreviewType(ftype);
     setPreviewLoading(true);
 
-    if (['image', 'pdf', 'office', 'csv', 'audio', 'video'].includes(ftype)) {
+    if (['image', 'pdf', 'office', 'csv', 'audio', 'video', 'text'].includes(ftype)) {
       // These render via their own components, no content to preload
       setPreviewLoading(false);
       return;
     }
 
-    // Text preview (read-only)
-    try {
-      await axios.get(`${API}/api/read?path=${encodeURIComponent(itemPath)}`);
-    } catch (err) {
-      // ignore
-    } finally {
-      setPreviewLoading(false);
-    }
+    setPreviewLoading(false);
   };
 
   const closePreview = () => {
@@ -353,11 +427,48 @@ export default function App() {
     return `${API}/api/download?path=${encodeURIComponent(p)}`;
   };
 
+  const handleOpenFilePath = async (relativePath) => {
+    setError('');
+    setLoading(true);
+    try {
+      const detailsRes = await axios.get(`${API}/api/details?path=${encodeURIComponent(relativePath)}`);
+      const data = detailsRes.data;
+      const fullPath = data.relativePath != null ? data.relativePath : relativePath;
+      if (data.isDirectory) {
+        setPath(fullPath === '' ? '.' : fullPath);
+        return;
+      }
+      const lastSlash = fullPath.lastIndexOf('/');
+      const dirPart = lastSlash >= 0 ? fullPath.substring(0, lastSlash) : '';
+      const filePart = lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
+      const dirPath = dirPart === '' ? '.' : dirPart;
+
+      const filesRes = await axios.get(`${API}/api/files?path=${encodeURIComponent(dirPath)}`);
+      const dirItems = filesRes.data.items || [];
+      const foundItem = dirItems.find(i => i.name === filePart);
+      if (!foundItem) {
+        setError(`Archivo no encontrado en el directorio: ${filePart}`);
+        setPath(dirPath);
+        return;
+      }
+
+      setPath(dirPath);
+      setItems(dirItems);
+      setSearchQuery('');
+      setSelected(new Set());
+      setPendingFileTarget({ name: filePart });
+    } catch (err) {
+      setError(err.response?.data?.error || `No se encontró: ${relativePath}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Determine what actions a file supports
   const getFileActions = (name) => {
     const ftype = getFileType(name);
     return {
-      canPreview: ['image', 'pdf', 'office', 'csv', 'audio', 'video'].includes(ftype),
+      canPreview: ['image', 'pdf', 'office', 'csv', 'audio', 'video', 'text'].includes(ftype),
       canEdit: ftype === 'text',
       canDownload: true
     };
@@ -386,7 +497,7 @@ export default function App() {
         <div style={{ background: '#c0392b', padding: 12, borderRadius: 6, marginBottom: 16 }}>{error}</div>
       )}
 
-      <PathNavigator path={path} setPath={setPath} setSearchQuery={setSearchQuery} setSelected={setSelected} onRefresh={fetchFiles} />
+      <PathNavigator path={path} setPath={setPath} setSearchQuery={setSearchQuery} setSelected={setSelected} onRefresh={fetchFiles} onOpenFilePath={handleOpenFilePath} />
 
       {showMkdir && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -435,7 +546,12 @@ export default function App() {
                 .map(item => {
                   const actions = !item.isDirectory ? getFileActions(item.name) : {};
                   return (
-                    <tr key={item.name} style={{ borderBottom: '1px solid #1a1a2e' }}>
+                    <tr
+                      key={item.name}
+                      ref={el => rowRefs.current[item.name] = el}
+                      tabIndex={-1}
+                      style={{ borderBottom: '1px solid #1a1a2e', outline: 'none' }}
+                    >
                       <td style={tdStyle}><input type="checkbox" checked={selected.has(item.name)} onChange={() => toggleSelect(item.name)} /></td>
                       <td style={{ ...tdStyle, maxWidth: 200 }}>
                         {item.isDirectory ? (
@@ -550,7 +666,7 @@ export default function App() {
           <div style={{ ...modalContentStyle, maxWidth: ['image', 'office', 'csv', 'audio', 'video'].includes(previewType) ? 950 : 900, width: '100%' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18 }}>
-                {previewType === 'image' ? '🖼️ Vista previa' : previewType === 'pdf' ? '📄 Vista previa PDF' : previewType === 'office' ? '📊 Vista previa Office' : previewType === 'csv' ? '📈 Vista previa CSV' : previewType === 'audio' ? '🎵 Vista previa Audio' : previewType === 'video' ? '🎬 Vista previa Video' : '👁️ Vista previa'} — {previewItem}
+                {previewType === 'image' ? '🖼️ Vista previa' : previewType === 'pdf' ? '📄 Vista previa PDF' : previewType === 'office' ? '📊 Vista previa Office' : previewType === 'csv' ? '📈 Vista previa CSV' : previewType === 'audio' ? '🎵 Vista previa Audio' : previewType === 'video' ? '🎬 Vista previa Video' : previewType === 'text' ? '📝 Vista previa' : '👁️ Vista previa'} — {previewItem}
               </h2>
               <button style={btnStyle2} onClick={closePreview}>✕</button>
             </div>
@@ -587,6 +703,13 @@ export default function App() {
               <div style={{ width: '100%', height: '75vh', borderRadius: 6, overflow: 'hidden' }}>
                 <MediaViewer
                   url={getDownloadUrl(previewItem)}
+                  fileName={previewItem}
+                />
+              </div>
+            ) : previewType === 'text' ? (
+              <div style={{ width: '100%', height: '75vh', borderRadius: 6, overflow: 'hidden' }}>
+                <TextViewer
+                  filePath={path === '.' ? previewItem : `${path}/${previewItem}`}
                   fileName={previewItem}
                 />
               </div>
@@ -681,7 +804,7 @@ export default function App() {
   );
 }
 
-function PathNavigator({ path, setPath, setSearchQuery, setSelected, onRefresh }) {
+function PathNavigator({ path, setPath, setSearchQuery, setSelected, onRefresh, onOpenFilePath }) {
   const [editMode, setEditMode] = useState(false);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef(null);
@@ -696,8 +819,27 @@ function PathNavigator({ path, setPath, setSearchQuery, setSelected, onRefresh }
 
   const commitPath = () => {
     const trimmed = editValue.trim();
-    const newPath = trimmed === '' ? '.' : trimmed.replace(/^\/+|\/+$/g, '');
-    setPath(newPath);
+    if (trimmed === '') {
+      setPath('.');
+      setSearchQuery('');
+      setSelected(new Set());
+      setEditMode(false);
+      return;
+    }
+
+    const base = '/var/www/';
+    let relative;
+    if (trimmed.startsWith(base) || trimmed === '/var/www') {
+      relative = trimmed === '/var/www' ? '' : trimmed.slice(base.length).replace(/^\/+|\/+$/g, '');
+    } else {
+      relative = trimmed.replace(/^\/+|\/+$/g, '');
+    }
+
+    if (relative === '') {
+      setPath('.');
+    } else {
+      onOpenFilePath(relative);
+    }
     setSearchQuery('');
     setSelected(new Set());
     setEditMode(false);

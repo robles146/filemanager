@@ -32,6 +32,18 @@ Un gestor de archivos web completo con backend Node.js/Express y frontend React.
 - Guardado preservando el encoding original
 - Indicador de cambios sin guardar
 
+### Apertura directa por URL
+Puedes compartir enlaces que abran una carpeta o archivo específico automáticamente usando el parámetro `?path=`:
+
+```
+https://filemanager.testing.vulpik.com/?path=/var/www/proyecto
+https://filemanager.testing.vulpik.com/?path=/var/www/proyecto/README.md
+```
+
+- Si la ruta es un **directorio**, se muestra su contenido.
+- Si la ruta es un **archivo**, se abre su carpeta contenedora y se lanza automáticamente la vista previa o editor correspondiente.
+- Acepta rutas absolutas (`/var/www/...`) o relativas al sandbox (`proyecto/README.md`).
+
 ### Seguridad
 - 🔒 Autenticación básica (nginx + Express fallback)
 - 🛡️ Sandbox de rutas: solo permite operar dentro de `/var/www`
