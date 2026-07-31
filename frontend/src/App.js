@@ -123,7 +123,7 @@ export default function App() {
           const dirPath = lastSlash === -1 ? '.' : normalized.substring(0, lastSlash);
           const fileName = lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
           setPath(dirPath);
-          setPendingFileTarget({ name: fileName });
+          setPendingFileTarget({ name: fileName, dirPath });
         } else {
           setError(`La ruta no es un archivo ni directorio: ${targetPath}`);
         }
@@ -162,6 +162,8 @@ export default function App() {
 
   useEffect(() => {
     if (!pendingFileTarget || loading) return;
+    // Esperar a estar en el directorio correcto antes de buscar el archivo
+    if (pendingFileTarget.dirPath && path !== pendingFileTarget.dirPath) return;
     const foundItem = items.find(i => i.name === pendingFileTarget.name);
     if (!foundItem) {
       setError(`Archivo no encontrado en el directorio: ${pendingFileTarget.name}`);

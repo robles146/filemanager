@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API = '';
 
@@ -241,7 +242,7 @@ export default function TextViewer({ filePath, fileName }) {
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {isMarkdown ? (
           <div className="markdown-body" style={{ color: '#eee', lineHeight: 1.6 }}>
-            <ReactMarkdown components={markdownComponents}>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
           </div>
         ) : (
           <SyntaxHighlighter
