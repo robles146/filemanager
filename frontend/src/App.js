@@ -94,6 +94,12 @@ export default function App() {
   const openEditorRef = useRef(() => {});
   const openDetailsRef = useRef(() => {});
 
+  // Ref para leer el path actual de forma síncrona (útil para apertura por URL)
+  const pathRef = useRef(path);
+  useEffect(() => {
+    pathRef.current = path;
+  }, [path]);
+
   // Helper: convertir ruta absoluta /var/www/... a relativa usada por el frontend
   const normalizeFrontendPath = useCallback((rawPath) => {
     if (!rawPath) return '.';
@@ -123,7 +129,27 @@ export default function App() {
           const dirPath = lastSlash === -1 ? '.' : normalized.substring(0, lastSlash);
           const fileName = lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
           setPath(dirPath);
-          setPendingFileTarget({ name: fileName, dirPath });
+
+          // Esperar a que el estado path se actualice antes de abrir el archivo
+          let attempts = 0;
+          const maxAttempts = 40; // 2 segundos máximo
+          const interval = setInterval(() => {
+            attempts++;
+            if (pathRef.current === dirPath) {
+              clearInterval(interval);
+              const actions = getFileActions(fileName);
+              if (actions.canPreview) {
+                openPreviewRef.current(fileName);
+              } else if (actions.canEdit) {
+                openEditorRef.current(fileName);
+              } else {
+                openDetailsRef.current(fileName);
+              }
+            } else if (attempts >= maxAttempts) {
+              clearInterval(interval);
+              setError(`No se pudo abrir el archivo: ${targetPath}`);
+            }
+          }, 50);
         } else {
           setError(`La ruta no es un archivo ni directorio: ${targetPath}`);
         }
