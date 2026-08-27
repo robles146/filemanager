@@ -327,6 +327,21 @@ app.post('/api/save', (req, res) => {
   }
 });
 
+// CREAR nuevo archivo de texto
+app.post('/api/create-file', (req, res) => {
+  try {
+    const filePath = resolveSafePath(req.body.path);
+    if (fs.existsSync(filePath)) {
+      return res.status(400).json({ error: 'El archivo ya existe' });
+    }
+    const content = req.body.content || '';
+    fs.writeFileSync(filePath, content, 'utf-8');
+    res.json({ message: 'Archivo creado', path: req.body.path });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // CREAR ZIP desde selección de archivos/carpetas
 app.post('/api/zip', async (req, res) => {
   try {

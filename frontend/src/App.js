@@ -90,6 +90,12 @@ export default function App() {
   const [editorModified, setEditorModified] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
 
+  // Create new file modal
+  const [showCreateFileModal, setShowCreateFileModal] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileContent, setNewFileContent] = useState('');
+  const [newFileSaving, setNewFileSaving] = useState(false);
+
   const openPreviewRef = useRef(() => {});
   const openEditorRef = useRef(() => {});
   const openDetailsRef = useRef(() => {});
@@ -259,6 +265,27 @@ export default function App() {
       fetchFiles();
     } catch (err) {
       setError(err.response?.data?.error || err.message);
+    }
+  };
+
+  const handleCreateFile = async () => {
+    if (!newFileName.trim()) return;
+    setNewFileSaving(true);
+    setError('');
+    try {
+      const fileName = newFileName.trim();
+      await axios.post(`${API}/api/create-file`, {
+        path: path === '.' ? fileName : `${path}/${fileName}`,
+        content: newFileContent
+      });
+      setNewFileName('');
+      setNewFileContent('');
+      setShowCreateFileModal(false);
+      fetchFiles();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setNewFileSaving(false);
     }
   };
 
@@ -512,6 +539,7 @@ export default function App() {
             <input type="file" multiple style={{ display: 'none' }} onChange={handleUpload} disabled={uploading} />
           </label>
           <button style={btnStyle} onClick={() => setShowMkdir(!showMkdir)}>📂 Nueva carpeta</button>
+          <button style={btnStyle} onClick={() => setShowCreateFileModal(true)}>📄 Nuevo archivo</button>
           {selected.size > 0 && (
             <>
               <button style={{ ...btnStyle, background: '#8e44ad' }} onClick={() => setShowZipModal(true)}>📦 Crear ZIP ({selected.size})</button>
@@ -821,6 +849,59 @@ export default function App() {
                 spellCheck={false}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal CREAR NUEVO ARCHIVO */}
+      {showCreateFileModal && (
+        <div style={modalOverlayStyle} onClick={() => setShowCreateFileModal(false)}>
+          <div style={{ ...modalContentStyle, maxWidth: 900, width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18 }}>📄 Nuevo archivo</h2>
+              <button style={btnStyle2} onClick={() => setShowCreateFileModal(false)}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 13, color: '#888', marginBottom: 6 }}>Nombre del archivo (con extensión)</label>
+              <input
+                style={{ ...inputStyle, width: '100%' }}
+                placeholder="ejemplo.txt, readme.md, script.js..."
+                value={newFileName}
+                onChange={e => setNewFileName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !newFileSaving && handleCreateFile()}
+                autoFocus
+              />
+            </div>
+
+            <textarea
+              style={{
+                width: '100%',
+                minHeight: '50vh',
+                background: '#1a1a2e',
+                color: '#eee',
+                border: '1px solid #333',
+                borderRadius: 6,
+                padding: 12,
+                fontFamily: 'monospace',
+                fontSize: 13,
+                lineHeight: 1.5,
+                resize: 'vertical',
+                outline: 'none',
+                marginBottom: 16
+              }}
+              placeholder="Escribe el contenido del archivo aquí..."
+              value={newFileContent}
+              onChange={e => setNewFileContent(e.target.value)}
+              spellCheck={false}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button style={btnStyle2} onClick={() => setShowCreateFileModal(false)} disabled={newFileSaving}>Cancelar</button>
+              <button style={{ ...btnStyle, background: newFileName.trim() ? '#27ae60' : '#0f3460' }} onClick={handleCreateFile} disabled={newFileSaving || !newFileName.trim()}>
+                {newFileSaving ? '💾 Creando...' : '💾 Crear archivo'}
+              </button>
+            </div>
           </div>
         </div>
       )}
