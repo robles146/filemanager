@@ -96,6 +96,13 @@ export default function App() {
   const [newFileContent, setNewFileContent] = useState('');
   const [newFileSaving, setNewFileSaving] = useState(false);
 
+  // Extract ZIP modal
+  const [showExtractModal, setShowExtractModal] = useState(false);
+  const [extractZipName, setExtractZipName] = useState('');
+  const [extractDestDir, setExtractDestDir] = useState('');
+  const [extractFolderName, setExtractFolderName] = useState('');
+  const [extractLoading, setExtractLoading] = useState(false);
+
   const openPreviewRef = useRef(() => {});
   const openEditorRef = useRef(() => {});
   const openDetailsRef = useRef(() => {});
@@ -286,6 +293,39 @@ export default function App() {
       setError(err.response?.data?.error || err.message);
     } finally {
       setNewFileSaving(false);
+    }
+  };
+
+  const openExtractModal = (zipName) => {
+    const baseName = zipName.replace(/\.zip$/i, '');
+    setExtractZipName(zipName);
+    setExtractDestDir(path);
+    setExtractFolderName(baseName);
+    setShowExtractModal(true);
+  };
+
+  const handleExtractZip = async () => {
+    if (!extractFolderName.trim()) return;
+    setExtractLoading(true);
+    setError('');
+    try {
+      await axios.post(`${API}/api/extract`, {
+        path: path === '.' ? extractZipName : `${path}/${extractZipName}`,
+        destDir: extractDestDir.trim() || '.',
+        folderName: extractFolderName.trim()
+      });
+      setShowExtractModal(false);
+      setExtractZipName('');
+      setExtractDestDir('');
+      setExtractFolderName('');
+      // Si extrajimos en el directorio actual, recargar
+      if ((extractDestDir.trim() || '.') === path) {
+        fetchFiles();
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setExtractLoading(false);
     }
   };
 
@@ -546,6 +586,9 @@ export default function App() {
               <button style={{ ...btnStyle, background: '#c0392b' }} onClick={deleteSelected}>🗑️ Eliminar ({selected.size})</button>
             </>
           )}
+          {selected.size === 1 && Array.from(selected)[0].toLowerCase().endsWith('.zip') && (
+            <button style={{ ...btnStyle, background: '#27ae60' }} onClick={() => openExtractModal(Array.from(selected)[0])}>📦 Extraer ZIP</button>
+          )}
         </div>
       </header>
 
@@ -631,6 +674,9 @@ export default function App() {
                           <div style={{ position: 'relative' }}>
                             {/* Desktop: botones inline */}
                             <div style={{ display: 'flex', gap: 6 }} className="desktop-actions">
+                              {!item.isDirectory && item.name.toLowerCase().endsWith('.zip') && (
+                                <button style={{ ...btnStyle2, background: '#8e44ad' }} onClick={() => openExtractModal(item.name)} title="Extraer ZIP">📦</button>
+                              )}
                               {!item.isDirectory && actions.canPreview && (
                                 <button style={btnStyle2} onClick={() => openPreview(item.name)} title="Vista previa">👁️</button>
                               )}
@@ -654,6 +700,9 @@ export default function App() {
                               </button>
                               {openDropdown === item.name && (
                                 <div style={dropdownStyle}>
+                                  {!item.isDirectory && item.name.toLowerCase().endsWith('.zip') && (
+                                    <div style={dropdownItemStyle} onClick={() => { openExtractModal(item.name); setOpenDropdown(null); }}>📦 Extraer ZIP</div>
+                                  )}
                                   {!item.isDirectory && actions.canPreview && (
                                     <div style={dropdownItemStyle} onClick={() => { openPreview(item.name); setOpenDropdown(null); }}>👁️ Vista previa</div>
                                   )}
@@ -803,6 +852,51 @@ export default function App() {
               <button style={btnStyle2} onClick={() => setShowZipModal(false)} disabled={zipLoading}>Cancelar</button>
               <button style={{ ...btnStyle, background: '#8e44ad' }} onClick={handleCreateZip} disabled={zipLoading}>
                 {zipLoading ? '⏳ Generando...' : '📦 Crear y descargar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal EXTRAER ZIP */}
+      {showExtractModal && (
+        <div style={modalOverlayStyle} onClick={() => { if (!extractLoading) setShowExtractModal(false); }}>
+          <div style={{ ...modalContentStyle, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18 }}>📦 Extraer ZIP</h2>
+              <button style={btnStyle2} onClick={() => setShowExtractModal(false)} disabled={extractLoading}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>
+              Archivo: <strong style={{ color: '#eee' }}>{extractZipName}</strong>
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, color: '#888', marginBottom: 6 }}>Directorio destino (relativo a /var/www)</label>
+              <input
+                style={{ ...inputStyle, width: '100%' }}
+                value={extractDestDir}
+                onChange={e => setExtractDestDir(e.target.value)}
+                placeholder="."
+                disabled={extractLoading}
+              />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, color: '#888', marginBottom: 6 }}>Carpeta nueva (nombre de la carpeta a crear)</label>
+              <input
+                style={{ ...inputStyle, width: '100%' }}
+                value={extractFolderName}
+                onChange={e => setExtractFolderName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleExtractZip()}
+                disabled={extractLoading}
+                autoFocus
+              />
+            </div>
+            <p style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+              Se extraerá en: <code style={{ color: '#4cc9f0' }}>/var/www/{(extractDestDir.trim() || '.') === '.' ? '' : extractDestDir.trim() + '/'}{extractFolderName.trim()}</code>
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button style={btnStyle2} onClick={() => setShowExtractModal(false)} disabled={extractLoading}>Cancelar</button>
+              <button style={{ ...btnStyle, background: '#27ae60' }} onClick={handleExtractZip} disabled={extractLoading || !extractFolderName.trim()}>
+                {extractLoading ? '⏳ Extrayendo...' : '📦 Extraer'}
               </button>
             </div>
           </div>

@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const basicAuth = require('express-basic-auth');
+const unzipper = require('unzipper');
 const { ZipArchive } = require('archiver');
 
 const app = express();
@@ -400,6 +401,75 @@ app.post('/api/zip', async (req, res) => {
     if (!res.headersSent) {
       res.status(400).json({ error: err.message });
     }
+  }
+});
+
+// EXTRAER ZIP a un directorio destino
+app.post('/api/extract', async (req, res) => {
+  try {
+    const zipPath = resolveSafePath(req.body.path);
+    const folderName = (req.body.folderName || '').trim();
+
+    if (!fs.existsSync(zipPath) || !fs.statSync(zipPath).isFile()) {
+      return res.status(404).json({ error: 'ZIP no encontrado' });
+    }
+    if (path.extname(zipPath).toLowerCase() !== '.zip') {
+      return res.status(400).json({ error: 'El archivo no es un ZIP' });
+    }
+    if (!folderName || /[\\/]/.test(folderName) || folderName === '.' || folderName === '..') {
+      return res.status(400).json({ error: 'Nombre de carpeta inválido' });
+    }
+
+    // Directorio destino (relativo al sandbox, por defecto la raíz)
+    const destDir = resolveSafePath(req.body.destDir || '.');
+    const fullDest = path.join(destDir, folderName);
+    const resolvedFullDest = path.resolve(fullDest);
+
+    // Protección contra rutas fuera del sandbox
+    if (!resolvedFullDest.startsWith(path.resolve(BASE_DIR))) {
+      return res.status(400).json({ error: 'Ruta de destino no permitida' });
+    }
+    if (fs.existsSync(resolvedFullDest)) {
+      return res.status(400).json({ error: 'La carpeta destino ya existe' });
+    }
+
+    fs.mkdirSync(resolvedFullDest, { recursive: true });
+
+    let skipped = 0;
+    await fs.createReadStream(zipPath)
+      .pipe(unzipper.Parse())
+      .on('entry', (entry) => {
+        const normalized = path.normalize(entry.path);
+        // Protección contra Zip Slip
+        if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
+          skipped++;
+          entry.autodrain();
+          return;
+        }
+        const fullEntryPath = path.join(resolvedFullDest, normalized);
+        if (!fullEntryPath.startsWith(resolvedFullDest)) {
+          skipped++;
+          entry.autodrain();
+          return;
+        }
+        if (entry.type === 'Directory') {
+          fs.mkdirSync(fullEntryPath, { recursive: true });
+          entry.autodrain();
+        } else {
+          fs.mkdirSync(path.dirname(fullEntryPath), { recursive: true });
+          entry.pipe(fs.createWriteStream(fullEntryPath));
+        }
+      })
+      .promise();
+
+    res.json({
+      message: `ZIP extraído en ${req.body.destDir || '.'}/${folderName}`,
+      destDir: req.body.destDir || '.',
+      folderName,
+      skipped
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
